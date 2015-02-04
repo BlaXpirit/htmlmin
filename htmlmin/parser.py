@@ -94,7 +94,8 @@ class HTMLMinParser(HTMLParser):
                remove_optional_attribute_quotes=True,
                keep_pre=False,
                pre_tags=PRE_TAGS,
-               pre_attr='pre'):
+               pre_attr='pre',
+               handle_pre=lambda tag, data: data):
     HTMLParser.__init__(self)
     self.keep_pre = keep_pre
     self.pre_tags = pre_tags
@@ -105,6 +106,7 @@ class HTMLMinParser(HTMLParser):
     self.reduce_boolean_attributes = reduce_boolean_attributes
     self.remove_optional_attribute_quotes = remove_optional_attribute_quotes
     self.pre_attr = pre_attr
+    self.handle_pre = handle_pre
     self._data_buffer = []
     self._in_pre_tag = 0
     self._in_head = False
@@ -271,6 +273,7 @@ class HTMLMinParser(HTMLParser):
 
   def handle_data(self, data):
     if self._in_pre_tag > 0:
+      data = self.handle_pre(self._tag_stack[0][0], data)
       self._data_buffer.append(data)
     else:
       # remove_all_empty_space matches everything. remove_empty_space only

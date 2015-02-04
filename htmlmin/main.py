@@ -39,7 +39,8 @@ def minify(input,
            remove_optional_attribute_quotes=True,
            keep_pre=False,
            pre_tags=parser.PRE_TAGS,
-           pre_attr='pre'):
+           pre_attr='pre',
+           handle_pre=lambda tag, data: data):
   """Minifies HTML in one shot.
 
   :param input: A string containing the HTML to be minified.
@@ -81,6 +82,10 @@ def minify(input,
   :param pre_attr: Specifies the attribute that, when found in an HTML tag,
     indicates that the content of the tag should not be minified. Defaults to
     ``pre``.
+  :param handle_pre: A function that will be called for every text node inside
+    ``pre_tags``, with two arguments: ``tag`` (the name of the parent of this
+    node) and ``data`` (the text data itself). The function must return a string
+    (the replacement for ``data``).
   :return: A string containing the minified HTML.
 
   If you are going to be minifying multiple HTML documents, each with the same
@@ -95,7 +100,8 @@ def minify(input,
       remove_optional_attribute_quotes=remove_optional_attribute_quotes,
       keep_pre=keep_pre,
       pre_tags=pre_tags,
-      pre_attr=pre_attr)
+      pre_attr=pre_attr,
+      handle_pre=handle_pre)
   minifier.feed(input)
   minifier.close()
   return minifier.result
@@ -120,7 +126,8 @@ class Minifier(object):
                remove_optional_attribute_quotes=True,
                keep_pre=False,
                pre_tags=parser.PRE_TAGS,
-               pre_attr='pre'):
+               pre_attr='pre',
+               handle_pre=lambda tag, data: data):
     """Initialize the Minifier.
 
     See :class:`htmlmin.minify` for an explanation of options.
