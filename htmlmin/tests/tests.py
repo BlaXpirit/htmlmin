@@ -32,6 +32,8 @@ import htmlmin
 from htmlmin.decorator import htmlmin as htmlmindecorator
 from htmlmin.middleware import HTMLMinMiddleware
 
+from . import test_escape
+
 MINIFY_FUNCTION_TEXTS = {
   'simple_text': (
     '  a  b',
@@ -114,12 +116,20 @@ FEATURES_TEXTS = {
     '<body><br><br>   x   </body>',
   ),
   'remove_comments': (
-    '<body> this text should <!-- X --> have comments removed</body>',
+    '<body> this text should <!-- X --> have <!----> comments removed</body>',
     '<body> this text should have comments removed</body>',
   ),
   'keep_comments': (
     '<body> this text should <!--! not --> have comments removed</body>',
     '<body> this text should <!-- not --> have comments removed</body>',
+  ),
+  'keep_conditional_comments': (
+    '<body>keep IE conditional styles <!--[if IE8]><style>h1 {color: red;}</style><![endif]--></body>',
+    '<body>keep IE conditional styles <!--[if IE8]><style>h1 {color: red;}</style><![endif]--></body>',
+  ),
+  'remove_nonconditional_comments': (
+    '<body>remove other [if] things <!-- so [if IE8]--><style>h1 {color: red;}</style><!--[endif]--></body>',
+    '<body>remove other [if] things <style>h1 {color: red;}</style></body>',
   ),
   'keep_optional_attribute_quotes': (
     '<img width="100" height="50" src="#something" />',
@@ -303,14 +313,14 @@ class TestMinifyFunction(HTMLMinTestCase):
     with codecs.open('htmlmin/tests/large_test.html', encoding='utf-8') as inpf:
       inp = inpf.read()
     out = self.minify(inp)
-    self.assertEqual(len(inp) - len(out), 8599)
+    self.assertEqual(len(inp) - len(out), 9579)
 
   def test_high_minification_quality(self):
     import codecs
     with codecs.open('htmlmin/tests/large_test.html', encoding='utf-8') as inpf:
       inp = inpf.read()
     out = self.minify(inp, remove_all_empty_space=True, remove_comments=True)
-    self.assertEqual(len(inp) - len(out), 11836)
+    self.assertEqual(len(inp) - len(out), 12693)
 
 class TestMinifierObject(HTMLMinTestCase):
   __reference_texts__ = MINIFY_FUNCTION_TEXTS
@@ -356,6 +366,14 @@ class TestMinifyFeatures(HTMLMinTestCase):
 
   def test_keep_comments(self):
     text = self.__reference_texts__['keep_comments']
+    self.assertEqual(htmlmin.minify(text[0], remove_comments=True), text[1])
+
+  def test_keep_conditional_comments(self):
+    text = self.__reference_texts__['keep_conditional_comments']
+    self.assertEqual(htmlmin.minify(text[0], remove_comments=True), text[1])
+
+  def test_remove_nonconditional_comments(self):
+    text = self.__reference_texts__['remove_nonconditional_comments']
     self.assertEqual(htmlmin.minify(text[0], remove_comments=True), text[1])
 
   def test_keep_optional_attribute_quotes(self):
@@ -525,6 +543,7 @@ def suite():
         self_opening_tags_suite,
         decorator_suite,
         middleware_suite,
+        test_escape.suite(),
         ])
 
 if __name__ == '__main__':

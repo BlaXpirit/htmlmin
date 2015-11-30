@@ -27,10 +27,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from __future__ import unicode_literals
 import sys
-try:
-  from html import escape
-except ImportError:
-  from cgi import escape
 
 from io import StringIO
 
@@ -39,6 +35,8 @@ try:
   from html.parser import HTMLParser
 except ImportError:
   from HTMLParser import HTMLParser
+
+from . import escape
 
 PRE_TAGS = ('pre', 'textarea')  # styles and scripts are never minified
 # http://www.w3.org/TR/html51/syntax.html#elements-0
@@ -96,7 +94,12 @@ class HTMLMinParser(HTMLParser):
                pre_tags=PRE_TAGS,
                pre_attr='pre',
                handle_pre=lambda tag, data: data):
-    HTMLParser.__init__(self)
+    if sys.version_info[0] >= 3 and sys.version_info[1] >= 4:
+      # convert_charrefs is True by default in Python 3.5.0 and newer. It was
+      # introduced in 3.4.
+      HTMLParser.__init__(self, convert_charrefs=False)
+    else:
+      HTMLParser.__init__(self)
     self.keep_pre = keep_pre
     self.pre_tags = pre_tags
     self.remove_comments = remove_comments
@@ -125,24 +128,31 @@ class HTMLMinParser(HTMLParser):
   def build_tag(self, tag, attrs, close_tag):
     result = StringIO()
     result.write('<')
-    result.write(escape(tag))
+    result.write(escape.escape_tag(tag))
     needs_closing_space = False
     for k,v in attrs:
       result.write(' ')
-      result.write(escape(k))
+      result.write(escape.escape_attr_name(k))
       if v:
         if self.reduce_boolean_attributes and (
              k in BOOLEAN_ATTRIBUTES.get(tag,[]) or
              k in BOOLEAN_ATTRIBUTES['*']):
           pass
-        elif self.remove_optional_attribute_quotes and not any((c in v for c in ('"', "'", ' ', '<', '>', '='))):
-          result.write('=')
-          result.write(escape(v, quote=True))
-          needs_closing_space = v.endswith('/')
         else:
-          result.write('="')
-          result.write(escape(v, quote=True).replace('&#x27;', "'"))
-          result.write('"')
+          result.write('=')
+          (v, q) = escape.escape_attr_value(
+            v, double_quote=not self.remove_optional_attribute_quotes)
+          if q == escape.NO_QUOTES:
+            result.write(v)
+          elif q == escape.DOUBLE_QUOTE:
+            result.write('"')
+            result.write(v)
+            result.write('"')
+          else:  # SINGLE_QUOTE
+            result.write("'")
+            result.write(v)
+            result.write("'")
+          needs_closing_space = q == escape.NO_QUOTES and v.endswith('/')
       elif not self.reduce_empty_attributes:
         result.write('=""')
     if needs_closing_space:
@@ -258,7 +268,7 @@ class HTMLMinParser(HTMLParser):
         # results in a '<p></p>' in Chrome.
         pass
     if tag not in NO_CLOSE_TAGS:
-      self._data_buffer.extend(['</', escape(tag), '>'])
+      self._data_buffer.extend(['</', escape.escape_tag(tag), '>'])
 
   def handle_startendtag(self, tag, attrs):
     self._after_doctype = False
@@ -267,7 +277,8 @@ class HTMLMinParser(HTMLParser):
     self._data_buffer.append(self.build_tag(tag, attrs, tag not in NO_CLOSE_TAGS))
 
   def handle_comment(self, data):
-    if not self.remove_comments or data[0] == '!':
+    if not self.remove_comments or (
+        data and (data[0] == '!' or re.match(r'^\[if\s', data))):
       self._data_buffer.append('<!--{}-->'.format(
           data[1:] if data[0] == '!' else data))
 
